@@ -7,20 +7,25 @@ st.cache_resource.clear()
 def start_firebase():
     if not firebase_admin._apps:
         try:
-            # Secrets'tan sadece anahtarı alıyoruz
-            pk = st.secrets["firebase"]["private_key"]
+            # Secrets'tan ham metni al
+            raw_pk = st.secrets["firebase"]["private_key"]
             
-            # Sözlüğü burada oluşturuyoruz
+            # --- CERRAHİ TEMİZLİK OPERASYONU ---
+            # 1. Satırları parçala
+            lines = raw_pk.split('\n')
+            # 2. Her satırın başındaki ve sonundaki gizli boşlukları sil
+            clean_lines = [line.strip() for line in lines if line.strip()]
+            # 3. Google'ın beklediği formatta (satır sonu karakteriyle) birleştir
+            formatted_pk = "\n".join(clean_lines)
+            # ----------------------------------
+
             cred_dict = {
                 "type": "service_account",
                 "project_id": "altoor-a8df0",
                 "private_key_id": "ca77f9ba4f9e35430ced92d4687cd13403b3022f",
-                "private_key": pk,
+                "private_key": formatted_pk,
                 "client_email": "firebase-adminsdk-fbsvc@altoor-a8df0.iam.gserviceaccount.com",
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                 "token_uri": "https://oauth2.googleapis.com/token",
-                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-                "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40altoor-a8df0.iam.gserviceaccount.com"
             }
             
             cred = credentials.Certificate(cred_dict)
@@ -29,7 +34,7 @@ def start_firebase():
             })
             return True
         except Exception as e:
-            st.error(f"Hata: {e}")
+            st.error(f"Başlatma Hatası: {e}")
             return False
     return True
 
@@ -37,9 +42,10 @@ st.title("🏔️ ALTOOR")
 
 if start_firebase():
     try:
-        # Test amaçlı veri okumaya çalış
+        # Kapıyı gerçekten çalalım
         db.reference('users').get()
-        st.success("✅ BAŞARILI! Firebase kapıları açtı.")
+        st.success("✅ SONUNDA! İmza kabul edildi, içerideyiz.")
         st.balloons()
     except Exception as e:
-        st.error(f"Bağlantı var ama imza hatası: {e}")
+        st.error(f"Hala İmza Hatası (JWT): {e}")
+        st.info("Eğer bu da olmadıysa, tek yol Firebase'den yeni bir JSON alıp kopyalarken asla metin düzenleyiciye (Notepad vb.) yapıştırmadan direkt Secrets'a atmaktır.")
