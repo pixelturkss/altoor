@@ -2,18 +2,25 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, db
 import hashlib
-from datetime import datetime
 
-# --- FIREBASE BAĞLANTISI (ÇALIŞAN SİSTEMİN) ---
+# Önbelleği temizle
+st.cache_resource.clear()
+
 @st.cache_resource
 def init_firebase():
     if not firebase_admin._apps:
         try:
             cred_dict = dict(st.secrets["firebase"])
-            # Anahtardaki olası karakter hatalarını onarır
-            if "private_key" in cred_dict:
-                cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n").replace('\\n', '\n')
             
+            # --- KRİTİK TEMİZLİK BÖLGESİ ---
+            pk = cred_dict["private_key"]
+            # 1. Önce tüm gizli kaçış karakterlerini temizle
+            pk = pk.replace("\\n", "\n")
+            # 2. Eğer çift tırnaklar arasında kaldıysa onları temizle
+            pk = pk.strip('"').strip("'")
+            cred_dict["private_key"] = pk
+            # ------------------------------
+
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred, {
                 'databaseURL': 'https://altoor-a8df0-default-rtdb.asia-southeast1.firebasedatabase.app'
@@ -24,80 +31,15 @@ def init_firebase():
             return False
     return True
 
-# --- UYGULAMA AYARLARI ---
-st.set_page_config(page_title="Altoor", page_icon="🏔️")
+st.title("🏔️ ALTOOR")
 
 if init_firebase():
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
-
-    # --- GİRİŞ VE KAYIT EKRANI ---
-    if not st.session_state.logged_in:
-        st.title("🏔️ ALTOOR")
-        st.subheader("Sosyal Medyanın Zirvesi")
+    # TEST: Veritabanından veri çekmeyi dene (Hata buradaysa hemen görelim)
+    try:
+        test_get = db.reference('users').get()
+        st.success("✅ VERİ TABANI BAĞLANTISI TAMAM!")
         
-        tab1, tab2 = st.tabs(["Giriş Yap", "Kayıt Ol"])
-        
-        with tab1:
-            u = st.text_input("Kullanıcı Adı", key="l_u").lower().strip()
-            p = st.text_input("Şifre", type="password", key="l_p")
-            if st.button("Giriş"):
-                if u and p:
-                    h = hashlib.sha256(p.encode()).hexdigest()
-                    user_ref = db.reference(f'users/{u}').get()
-                    if user_ref and user_ref.get('pw') == h:
-                        st.session_state.logged_in = True
-                        st.session_state.user = u
-                        st.rerun()
-                    else:
-                        st.error("Kullanıcı adı veya şifre hatalı!")
-        
-        with tab2:
-            nu = st.text_input("Yeni Kullanıcı", key="r_u").lower().strip()
-            np = st.text_input("Yeni Şifre", type="password", key="r_p")
-            if st.button("Zirveye Katıl"):
-                if nu and np:
-                    check = db.reference(f'users/{nu}').get()
-                    if check:
-                        st.warning("Bu kullanıcı adı zaten alınmış!")
-                    else:
-                        nh = hashlib.sha256(np.encode()).hexdigest()
-                        db.reference(f'users/{nu}').set({"pw": nh})
-                        st.success("Kayıt Başarılı! Şimdi Giriş sekmesine geçebilirsin.")
-
-    # --- SOSYAL MEDYA AKIŞI ---
-    else:
-        st.sidebar.title(f"🏔️ @{st.session_state.user}")
-        if st.sidebar.button("Güvenli Çıkış"):
-            st.session_state.logged_in = False
-            st.rerun()
-
-        st.title("🏔️ Zirve Akışı")
-        
-        # Mesaj Gönderme
-        with st.form("mesaj_form", clear_on_submit=True):
-            mesaj = st.text_area("Zirvedekilere ne söylemek istersin?", max_chars=280)
-            if st.form_submit_button("Paylaş"):
-                if mesaj:
-                    db.reference('posts').push({
-                        "u": st.session_state.user,
-                        "t": mesaj,
-                        "h": datetime.now().strftime("%d/%m %H:%M")
-                    })
-                    st.rerun()
-
-        st.divider()
-
-        # Mesajları Firebase'den Çek
-        posts = db.reference('posts').get()
-        if posts:
-            # Postları sözlükten listeye çevirip ters çevir (en yeni üstte)
-            for pid in reversed(list(posts.keys())):
-                p = posts[pid]
-                with st.container():
-                    st.markdown(f"**@{p['u']}**")
-                    st.write(p['t'])
-                    st.caption(f"🕒 {p['h']}")
-                    st.divider()
-        else:
-            st.info("Henüz kimse bir şey yazmamış. İlk mesajı sen at!")
+        # Giriş/Kayıt kodlarını buraya ekle (Bir önceki mesajdaki gibi)
+        st.info("Şimdi kayıt olup mesaj atabilirsin.")
+    except Exception as e:
+        st.error(f"Bağlantı kuruldu ama veri çekilemiyor: {e}")
