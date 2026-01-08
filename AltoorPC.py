@@ -2,34 +2,44 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, db
 
-# Önbelleği temizle
 st.cache_resource.clear()
 
-# JSON dosyasını not defteriyle aç ve değerleri TEK TEK buraya yapıştır
-# Kopyalarken başında sonunda boşluk kalmadığından emin ol!
-service_account_info = {
-  "type": "service_account",
-  "project_id": "altoor-a8df0",
-  "private_key_id": "ca77f9ba4f9e35430ced92d4687cd13403b3022f",
-  "private_key": st.secrets["firebase"]["private_key"].replace("\\n", "\n"),
-  "client_email": "firebase-adminsdk-fbsvc@altoor-a8df0.iam.gserviceaccount.com",
-  "token_uri": "https://oauth2.googleapis.com/token",
-}
+def fix_and_connect():
+    if not firebase_admin._apps:
+        try:
+            # 1. Anahtarı al ve satır satır temizle
+            raw_key = st.secrets["firebase"]["private_key"]
+            lines = raw_key.split('\n')
+            clean_lines = [l.strip() for l in lines if l.strip()]
+            final_key = "\n".join(clean_lines)
+            
+            # 2. Sözlüğü manuel olarak burada kur (En güvenlisi)
+            config = {
+                "type": "service_account",
+                "project_id": "altoor-a8df0",
+                "private_key_id": "ca77f9ba4f9e35430ced92d4687cd13403b3022f",
+                "private_key": final_key,
+                "client_email": "firebase-adminsdk-fbsvc@altoor-a8df0.iam.gserviceaccount.com",
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+            
+            cred = credentials.Certificate(config)
+            firebase_admin.initialize_app(cred, {
+                'databaseURL': 'https://altoor-a8df0-default-rtdb.asia-southeast1.firebasedatabase.app'
+            })
+            return True
+        except Exception as e:
+            st.error(f"Bağlantı Hatası: {e}")
+            return False
+    return True
 
-if not firebase_admin._apps:
+st.title("🏔️ ALTOOR")
+
+if fix_and_connect():
     try:
-        cred = credentials.Certificate(service_account_info)
-        firebase_admin.initialize_app(cred, {
-            'databaseURL': 'https://altoor-a8df0-default-rtdb.asia-southeast1.firebasedatabase.app'
-        })
-        st.success("Bağlantı Teknik Olarak Kuruldu!")
+        # TEST: Veritabanına ulaşmaya çalış
+        db.reference('users').get()
+        st.success("✅ İMZA KABUL EDİLDİ! Zirveye ulaşıldı.")
+        st.balloons()
     except Exception as e:
-        st.error(f"Başlatma Hatası: {e}")
-
-try:
-    # Veritabanını oku
-    db.reference('users').get()
-    st.balloons()
-    st.success("ZİRVE TAMAM! UYUYABİLİRSİN.")
-except Exception as e:
-    st.error(f"Hata: {e}")
+        st.error(f"İmza Hatası Devam Ediyor: {e}")
